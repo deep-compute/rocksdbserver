@@ -13,7 +13,7 @@ import gevent
 import msgpack
 import rocksdb
 from decorator import decorator
-from funcserver import RPCServer, RPCClient, BaseHandler
+from funcserver import Server, Client, BaseHandler
 
 ITERATOR_EXPIRY_CHECK = 5 * 60 # 5 minutes
 ITERATOR_EXPIRE = 15 * 60 # 15 minutes
@@ -165,6 +165,7 @@ class Table(object):
     KEYFN = staticmethod(lambda item: uuid.uuid1().hex)
     PACKFN = staticmethod(msgpack.packb)
     UNPACKFN = staticmethod(msgpack.unpackb)
+    STATS_DUMP_PERIOD_SEC = 60 # 60 seconds
 
     def __init__(self, data_dir, db):
         self.data_dir = os.path.join(data_dir, self.NAME)
@@ -197,6 +198,7 @@ class Table(object):
 
     def define_options(self):
         opts = rocksdb.Options()
+        opts.stats_dump_period_sec = self.STATS_DUMP_PERIOD_SEC
         return opts
 
     def put(self, key, item, batch=None,
@@ -523,7 +525,7 @@ class RocksDBAPI(object):
     def dump(self, table, path, fmt=None, allow_coop=True):
         return table.dump(path, fmt, allow_coop)
 
-class RocksDBServer(RPCServer):
+class RocksDBServer(Server):
     NAME = 'RocksDBServer'
     DESC = 'RocksDB Server'
 
@@ -558,8 +560,8 @@ class RocksDBServer(RPCServer):
 
             time.sleep(ITERATOR_EXPIRY_CHECK)
 
-    def pre_start(self):
-        super(RocksDBServer, self).pre_start()
+    def pre_run(self):
+        super(RocksDBServer, self).pre_run()
         self.set_file_limits()
 
         self.thread_expire_iters = gevent.spawn(self.expire_iters)
@@ -571,7 +573,7 @@ class RocksDBServer(RPCServer):
         parser.add_argument('data_dir', type=str, metavar='data-dir',
             help='Directory path where data is stored')
 
-class RocksDBClient(RPCClient):
+class RocksDBClient(Client):
 
     def _iter(self, table, reverse, fn, prefix=None):
         fn = getattr(self, fn)
@@ -605,4 +607,4 @@ class RocksDBClient(RPCClient):
         return self._iter(table, reverse, 'iter_items')
 
 if __name__ == '__main__':
-    RocksDBServer().start()
+    RocksDBServer().run()
