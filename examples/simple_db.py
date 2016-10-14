@@ -16,4 +16,4 @@ class SimpleDBServer(RocksDBServer):
         return SimpleDBAPI(self.args.data_dir)
 
 if __name__ == '__main__':
-    SimpleDBServer().start()
+    SimpleDBServer()

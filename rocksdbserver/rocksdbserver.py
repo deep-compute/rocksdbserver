@@ -607,4 +607,4 @@ class RocksDBClient(Client):
         return self._iter(table, reverse, 'iter_items')
 
 if __name__ == '__main__':
-    RocksDBServer().run()
+    RocksDBServer()

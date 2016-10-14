@@ -52,13 +52,13 @@ class SimpleDBServer(RocksDBServer):
         return SimpleDBAPI(self.args.data_dir)
 
 if __name__ == '__main__':
-    SimpleDBServer().start()
+    SimpleDBServer()
 ```
 
 The above code represents a database with just one table called 'names'. Run this server by doing
 
 ``` bash
-python examples/simple_db.py /tmp/data
+python examples/simple_db.py run /tmp/data
 ```
 
 The argument /tmp/data points to the data directory where the db files are stored. You can pick an alternate location too.

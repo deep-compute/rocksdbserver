@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="rocksdbserver",
-    version='0.1.1',
+    version='0.1.2',
     description="RocksDB Server",
     keywords='rocksdbserver rocksdb',
     author='Prashanth Ellina',
