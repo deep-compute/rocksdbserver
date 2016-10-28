@@ -13,7 +13,8 @@ class SimpleDBServer(RocksDBServer):
     DESC = 'Simple DB Server based on RockDB Server'
 
     def prepare_api(self):
+        super(SimpleDBAPI, self).prepare_api()
         return SimpleDBAPI(self.args.data_dir)
 
 if __name__ == '__main__':
-    SimpleDBServer()
+    SimpleDBServer().start()

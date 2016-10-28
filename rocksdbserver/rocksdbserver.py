@@ -537,6 +537,8 @@ class RocksDBServer(Server):
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
 
+        self.set_file_limits()
+
     def set_file_limits(self):
         try:
             # ulimit -n unlimited
@@ -545,10 +547,10 @@ class RocksDBServer(Server):
         except ValueError:
             self.log.warning('unable to increase num files limit. run as root?')
 
-    def expire_iters(self):
+    def expire_iters(self, api):
         while 1:
             ts = time.time()
-            for table in self.api.tables.itervalues():
+            for table in api.tables.itervalues():
                 expired = []
 
                 for iter_name, _iter in table.iters.iteritems():
@@ -560,14 +562,11 @@ class RocksDBServer(Server):
 
             time.sleep(ITERATOR_EXPIRY_CHECK)
 
-    def pre_run(self):
-        super(RocksDBServer, self).pre_run()
-        self.set_file_limits()
-
-        self.thread_expire_iters = gevent.spawn(self.expire_iters)
-
     def prepare_api(self):
-        return RocksDBAPI(self.args.data_dir)
+        super(RocksDBServer, self).prepare_api()
+        api = RocksDBAPI(self.args.data_dir)
+        self.thread_expire_iters = gevent.spawn(self.expire_iters, api)
+        return api
 
     def define_args(self, parser):
         parser.add_argument('data_dir', type=str, metavar='data-dir',
@@ -607,4 +606,4 @@ class RocksDBClient(Client):
         return self._iter(table, reverse, 'iter_items')
 
 if __name__ == '__main__':
-    RocksDBServer()
+    RocksDBServer().start()

@@ -52,7 +52,7 @@ class SimpleDBServer(RocksDBServer):
         return SimpleDBAPI(self.args.data_dir)
 
 if __name__ == '__main__':
-    SimpleDBServer()
+    SimpleDBServer().start()
 ```
 
 The above code represents a database with just one table called 'names'. Run this server by doing
