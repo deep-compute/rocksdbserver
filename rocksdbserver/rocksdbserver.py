@@ -569,6 +569,7 @@ class RocksDBServer(Server):
         return api
 
     def define_args(self, parser):
+        super(RocksDBServer, self).define_args(parser)
         parser.add_argument('data_dir', type=str, metavar='data-dir',
             help='Directory path where data is stored')
 
