@@ -1,0 +1,45 @@
+dist: trusty
+sudo: required
+language: python
+python:
+  - "2.7"
+install: 
+  - sudo apt-get install build-essential libsnappy-dev zlib1g-dev libbz2-dev libgflags-dev liblz4-dev python-dev
+  - git clone "https://github.com/facebook/rocksdb.git"
+  - cd rocksdb
+  - git checkout "v4.6.1"
+  - make shared_lib
+  - export CPLUS_INCLUDE_PATH=${CPLUS_INCLUDE_PATH}:`pwd`/include
+  - export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:`pwd`
+  - export LIBRARY_PATH=${LIBRARY_PATH}:`pwd`
+  - cd -
+  - pip install .
+script:
+  - echo "no tests yet"
+before_deploy:
+  - "wget https://github.com/jgm/pandoc/releases/download/1.19.1/pandoc-1.19.1-1-amd64.deb -O $TRAVIS_BUILD_DIR/pandoc.deb"
+  - "sudo dpkg -i $TRAVIS_BUILD_DIR/pandoc.deb"
+  - "rm $TRAVIS_BUILD_DIR/pandoc.deb"
+  - "pandoc --from=markdown --to=rst --output=$TRAVIS_BUILD_DIR/README.rst README.md"
+deploy:
+    # test pypi
+  - provider: pypi
+    distributions: "sdist bdist_wheel"
+    server: https://testpypi.python.org/pypi
+    skip_cleanup: true
+    user: "deepcompute"
+    password:
+      secure: "osC9Hw55g4pCu/MWnhwLIuSaDcY+xjBurS48oQovbyfvNUAsHYHFBTkY4WLJiU+QvaK5pIDSpvGtoVr2mTdG8vx++A2tEp3NZ/c1ArKbLBOOIzR/D/wau+YZl8rnyZ33FAp3Aek4RkVBlYrPJstzPlLk/CZT26Gg/GwIe21QNIFpuJKGGkODrOCC53Y7qe91OwVBPrxcZUxhKhAy9Nsy5AfV/v2iVUT94KJ8iJwRVxrZz+BlyzAwaeRXV5wbkFxxks0pHyQphHd4S9Cmz8Iqrhz7xzURR0Kv0+PfICsJzEr3Di150hrIEMaHHhapP+2rcYE2yHqvKZ0ntYyqsjEaHy1plWVia7Vim3A39uRw8AgsgZvDPcu8yVq/4RPuJ4iYKu6m4EtEPTpAmdi+RE5wT+gSytILfcWKiYuGsmfDtYQsrGRKrVhdJ3Jd0BIc3+QAvjci4kkDz+TO3NDoSpoLY4pizLoNkhiCzqtKlWwRaFMqi6AYLSvHXT/sZX2wnBTc91zWn3mgVSdsHO17nChGuxgUJ88MxUGS8Vq+gBn4+h9x1Ajc7ALRQ7dwO7drE//+Co90+F1g7tiHlTnFCA/P7Owk1zJzP7Am+hlU2CC79JVq4QRZfweodvXB46eDg6Y2a+//NpGIz3kPMS0JUMzhbq9pjv6Fhu2+FvIwf5Zovj0="
+    on:
+      branch: master
+      tags: false
+    # pypi
+  - provider: pypi
+    distributions: "sdist bdist_wheel"
+    skip_cleanup: true
+    user: "deepcompute"
+    password:
+      secure: "osC9Hw55g4pCu/MWnhwLIuSaDcY+xjBurS48oQovbyfvNUAsHYHFBTkY4WLJiU+QvaK5pIDSpvGtoVr2mTdG8vx++A2tEp3NZ/c1ArKbLBOOIzR/D/wau+YZl8rnyZ33FAp3Aek4RkVBlYrPJstzPlLk/CZT26Gg/GwIe21QNIFpuJKGGkODrOCC53Y7qe91OwVBPrxcZUxhKhAy9Nsy5AfV/v2iVUT94KJ8iJwRVxrZz+BlyzAwaeRXV5wbkFxxks0pHyQphHd4S9Cmz8Iqrhz7xzURR0Kv0+PfICsJzEr3Di150hrIEMaHHhapP+2rcYE2yHqvKZ0ntYyqsjEaHy1plWVia7Vim3A39uRw8AgsgZvDPcu8yVq/4RPuJ4iYKu6m4EtEPTpAmdi+RE5wT+gSytILfcWKiYuGsmfDtYQsrGRKrVhdJ3Jd0BIc3+QAvjci4kkDz+TO3NDoSpoLY4pizLoNkhiCzqtKlWwRaFMqi6AYLSvHXT/sZX2wnBTc91zWn3mgVSdsHO17nChGuxgUJ88MxUGS8Vq+gBn4+h9x1Ajc7ALRQ7dwO7drE//+Co90+F1g7tiHlTnFCA/P7Owk1zJzP7Am+hlU2CC79JVq4QRZfweodvXB46eDg6Y2a+//NpGIz3kPMS0JUMzhbq9pjv6Fhu2+FvIwf5Zovj0="
+    on:
+      branch: master
+      tags: true

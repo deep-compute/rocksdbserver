@@ -1,4 +1,8 @@
-# rocksdbserver
+rocksdbserver
+=============
+
+[![Build Status](https://travis-ci.org/deep-compute/rocksdbserver.svg?branch=master)](https://travis-ci.org/deep-compute/rocksdbserver)
+[![PyPI version](https://badge.fury.io/py/rocksdbserver.svg)](https://badge.fury.io/py/rocksdbserver)
 
 A server exposing an RPC interface to RocksDB
 
@@ -24,7 +28,7 @@ $ sudo mv include/* /usr/include/
 ### Install RocksDBServer
 
 ``` bash
-sudo pip install git+git://github.com/prashanthellina/rocksdbserver.git
+sudo pip install rocksdbserver
 ```
 
 ## Usage
