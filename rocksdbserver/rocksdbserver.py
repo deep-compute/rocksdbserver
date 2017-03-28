@@ -1,24 +1,16 @@
-from gevent import monkey; monkey.patch_all()
-
 import os
+import re
 import time
 import uuid
 import resource
-import random
-import string
 import shutil
-from inspect import getcallargs
-
-import gevent
+import requests
 import msgpack
 import rocksdb
 from decorator import decorator
 from funcserver import Server, Client, BaseHandler
 
-ITERATOR_EXPIRY_CHECK = 5 * 60 # 5 minutes
-ITERATOR_EXPIRE = 15 * 60 # 15 minutes
 MAX_OPEN_FILES = 500000
-ALPHANUM = string.letters + string.digits
 
 def make_staticprefix(name, size):
     class StaticPrefix(rocksdb.interfaces.SliceTransform):
@@ -78,10 +70,6 @@ class AttrDict(dict):
         return ch
 
 
-def gen_random_seq(length=10):
-    return ''.join([random.choice(ALPHANUM) for i in xrange(length)])
-
-
 @decorator
 def ensuretable(fn, self, table, *args, **kwargs):
     if table not in self.tables:
@@ -89,78 +77,8 @@ def ensuretable(fn, self, table, *args, **kwargs):
     return fn(self, self.tables[table], *args, **kwargs)
 
 
-@decorator
-def ensureiter(fn, self, _iter, *args, **kwargs):
-    if _iter not in self.iters:
-        raise Exception('Iter "%s" does not exist' % _iter)
-
-    _iter = self.iters[_iter]
-    _iter.ts_last_activity = time.time()
-    return fn(self, _iter, *args, **kwargs)
-
-
-@decorator
-def ensurenewiter(fn, self, *args, **kwargs):
-    name = getcallargs(fn, *args, **kwargs)['name'] or gen_random_seq()
-    if args: args = list(args); args[0] = name
-    else: kwargs['name'] = name
-
-    if name in self.iters:
-        raise Exception('iter "%s" exists already!' % name)
-
-    return fn(self, *args, **kwargs)
-
-
-class Iterator(object):
-    NUM_RECORDS = 1000
-
-    def __init__(self, table, type='items', reverse=False):
-        '''
-        @type: str; can be items/keys/values
-        '''
-        self.table = table
-        self.type = type
-        self.reverse = reverse
-        self.ts_last_activity = time.time()
-
-        iterfn = getattr(self.table.rdb,
-            {'keys': 'iterkeys', 'values': 'itervalues'}\
-            .get(type, 'iteritems'))
-
-        self._iter = iterfn()
-
-        if reverse:
-            self._iter = reversed(self._iter)
-
-    def get(self, num=NUM_RECORDS):
-        records = []
-
-        for record in self._iter:
-            if self.type == 'items':
-                key, item = record
-                item = self.table.unpackfn(item)
-                record = (key, item)
-            elif self.type == 'values':
-                record = self.table.unpackfn(record)
-
-            records.append(record)
-            if len(records) >= num: break
-
-        return records
-
-    def seek(self, key):
-        self._iter.seek(key)
-
-    def seek_to_first(self):
-        return self._iter.seek_to_first()
-
-    def seek_to_last(self):
-        return self._iter.seek_to_last()
-
-
 class Table(object):
     NAME = 'noname'
-    ITER = Iterator
 
     KEYFN = staticmethod(lambda item: uuid.uuid1().hex)
     PACKFN = staticmethod(msgpack.packb)
@@ -171,12 +89,10 @@ class Table(object):
         self.data_dir = os.path.join(data_dir, self.NAME)
         self.rdb = self.open()
         self.db = db
-        self.iters = {}
 
         self.keyfn = self.KEYFN
         self.packfn = self.PACKFN
         self.unpackfn = self.UNPACKFN
-        self.iter_klass = self.ITER
 
     def __str__(self):
         return '<Table: %s>' % self.NAME
@@ -193,7 +109,6 @@ class Table(object):
         return rocksdb.DB(self.data_dir, opts)
 
     def close(self):
-        self.iters = {}
         del self.rdb
 
     def define_options(self):
@@ -263,8 +178,6 @@ class Table(object):
         for index, k in enumerate(_iter): pass
         return index + 1
 
-    # Iteration
-
     def list_keys(self):
         _iter = self.rdb.iterkeys()
         _iter.seek_to_first()
@@ -275,42 +188,80 @@ class Table(object):
         _iter.seek_to_first()
         return list(self.unpackfn(x) for x in _iter)
 
-    @ensurenewiter
-    def iter_keys(self, name=None, reverse=False):
-        self.iters[name] = self.iter_klass(self, type='keys', reverse=reverse)
-        return name
 
-    @ensurenewiter
-    def iter_values(self, name=None, reverse=False):
-        self.iters[name] = self.iter_klass(self, type='values', reverse=reverse)
-        return name
+    def _configure_iterator(self, iterator, seek_to=None, reverse=False):
+        """
+        configures the iterator by seeking to the right position and
+        reversing if required.
+        """
+        if seek_to is not None:
+            iterator.seek(seek_to)
+        elif not reverse:
+            iterator.seek_to_first()
+        else:
+            iterator.seek_to_last()
 
-    @ensurenewiter
-    def iter_items(self, name=None, reverse=False):
-        self.iters[name] = self.iter_klass(self, type='items', reverse=reverse)
-        return name
+        if reverse:
+            iterator = reversed(iterator)
 
-    def list_iters(self):
-        return self.iters.keys()
+        return iterator
 
-    def close_iter(self, _iter):
-        del self.iters[_iter]
+    def iter_keys(self, seek_to=None, reverse=False, regex=None):
+        """
+        iterates through the keys in the database.
+        `seek_to` - seeks to the given position if specified.
+            defaults to the first record if reverse is False.
+            defaults to the last record if reverse is True.
 
-    @ensureiter
-    def iter_get(self, _iter, num=Iterator.NUM_RECORDS):
-        return _iter.get(num)
+        `regex` - returns only keys that match the regex.
+        """
 
-    @ensureiter
-    def iter_seek(self, _iter, key):
-        return _iter.seek(key)
+        if regex is not None:
+            regex = re.compile(regex)
 
-    @ensureiter
-    def iter_seek_to_first(self, _iter):
-        return _iter.seek_to_first()
+        _iter = self.rdb.iterkeys()
+        _iter = self._configure_iterator(_iter, seek_to=seek_to, reverse=reverse)
+        for key in _iter:
+            if regex is not None and not regex.match(key):
+                continue
 
-    @ensureiter
-    def iter_seek_to_last(self, _iter):
-        return _iter.seek_to_last()
+            yield key
+
+    def iter_items(self, seek_to=None, reverse=False, regex=None):
+        """
+        iterates through the items in the database.
+        `seek_to` - seeks to the given position if specified.
+            defaults to the first record if reverse is False.
+            defaults to the last record if reverse is True.
+
+        `regex` - returns only items who's keys match the regex.
+        """
+
+        if regex is not None:
+            regex = re.compile(regex)
+
+        _iter = self.rdb.iteritems()
+        _iter = self._configure_iterator(_iter, seek_to=seek_to, reverse=reverse)
+
+        for (key, value) in _iter:
+            if regex is not None and not regex.match(key):
+                continue
+
+            yield (key, self.unpackfn(value))
+
+    def iter_values(self, seek_to=None, reverse=False, regex=None):
+        """
+        iterates through the values in the database.
+        `seek_to` - seeks to the given position if specified.
+            defaults to the first record if reverse is False.
+            defaults to the last record if reverse is True.
+
+        `regex` - returns only values who's keys match the regex.
+        """
+
+        item_iter = self.iter_items(seek_to=seek_to, reverse=reverse, regex=regex)
+        for (key, value) in item_iter:
+            yield value
 
     # Backup and restore
 
@@ -431,43 +382,54 @@ class RocksDBAPI(object):
         '''
         return table.count()
 
-    # Iteration API methods
+    # TODO Iteration API methods
+    @ensuretable
+    def iter_keys(self, table, seek_to=None, reverse=False, regex=None):
+        '''
+        iterates through the keys in the table `table`.
+        `seek_to` seeks to the given position if specified.
+            - defaults to the first record if reverse is False.
+            - defaults to the last record if reverse is True.
+
+        `regex` - returns only keys that match the regex.
+        '''
+        keys_iter = table.iter_keys(
+            seek_to=seek_to, reverse=reverse, regex=regex,
+        )
+        for key in keys_iter:
+            yield key
 
     @ensuretable
-    def iter_keys(self, table, name=None, reverse=False):
-        return table.iter_keys(name=name, reverse=reverse)
+    def iter_values(self, table, seek_to=None, reverse=False, regex=None):
+        '''
+        iterates through the values in the table `table`.
+        `seek_to` - seeks to the given position if specified.
+            defaults to the first record if reverse is False.
+            defaults to the last record if reverse is True.
+
+        `regex` - returns only values who's keys match the regex.
+        '''
+        values_iter = table.iter_values(
+            seek_to=seek_to, reverse=reverse, regex=regex,
+        )
+        for value in values_iter:
+            yield value
 
     @ensuretable
-    def iter_values(self, table, name=None, reverse=False):
-        return table.iter_values(name=name, reverse=reverse)
+    def iter_items(self, table, seek_to=None, reverse=False, regex=None):
+        '''
+        iterates through the items in the table `table`..
+        `seek_to` - seeks to the given position if specified.
+            defaults to the first record if reverse is False.
+            defaults to the last record if reverse is True.
 
-    @ensuretable
-    def iter_items(self, table, name=None, reverse=False):
-        return table.iter_items(name=name, reverse=reverse)
-
-    @ensuretable
-    def list_iters(self, table):
-        return table.list_iters()
-
-    @ensuretable
-    def close_iter(self, table, name):
-        return table.close_iter(name)
-
-    @ensuretable
-    def iter_get(self, table, name, num=Iterator.NUM_RECORDS):
-        return table.iter_get(name, num)
-
-    @ensuretable
-    def iter_seek(self, table, name, key):
-        return table.iter_seek(name, key)
-
-    @ensuretable
-    def iter_seek_to_first(self, table, name):
-        return table.iter_seek_to_first(name)
-
-    @ensuretable
-    def iter_seek_to_last(self, table, name):
-        return table.iter_seek_to_last(name)
+        `regex` - returns only items who's keys match the regex.
+        '''
+        items_iter = table.iter_items(
+            seek_to=seek_to, reverse=reverse, regex=regex,
+        )
+        for (key, value) in items_iter:
+            yield (key, value)
 
     @ensuretable
     def list_keys(self, table):
@@ -547,25 +509,9 @@ class RocksDBServer(Server):
         except ValueError:
             self.log.warning('unable to increase num files limit. run as root?')
 
-    def expire_iters(self, api):
-        while 1:
-            ts = time.time()
-            for table in api.tables.itervalues():
-                expired = []
-
-                for iter_name, _iter in table.iters.iteritems():
-                    if ts - _iter.ts_last_activity >= ITERATOR_EXPIRE:
-                        expired.append(iter_name)
-
-                for iter_name in expired:
-                    table.close_iter(iter_name)
-
-            time.sleep(ITERATOR_EXPIRY_CHECK)
-
     def prepare_api(self):
         super(RocksDBServer, self).prepare_api()
         api = RocksDBAPI(self.args.data_dir)
-        self.thread_expire_iters = gevent.spawn(self.expire_iters, api)
         return api
 
     def define_args(self, parser):
@@ -574,37 +520,7 @@ class RocksDBServer(Server):
             help='Directory path where data is stored')
 
 class RocksDBClient(Client):
-
-    def _iter(self, table, reverse, fn, prefix=None):
-        fn = getattr(self, fn)
-        name = fn(table, reverse=reverse)
-
-        if prefix is None:
-            if reverse:
-                self.iter_seek_to_last(table, name)
-            else:
-                self.iter_seek_to_first(table, name)
-
-        else:
-            self.iter_seek(table, name, prefix)
-
-        while 1:
-            items = self.iter_get(table, name)
-            if not items: break
-
-            for item in items:
-                yield item
-
-        self.close_iter(table, name)
-
-    def iterkeys(self, table, reverse=False):
-        return self._iter(table, reverse, 'iter_keys')
-
-    def itervalues(self, table, reverse=False):
-        return self._iter(table, reverse, 'iter_values')
-
-    def iteritems(self, table, reverse=False):
-        return self._iter(table, reverse, 'iter_items')
+    pass
 
 if __name__ == '__main__':
     RocksDBServer().start()
