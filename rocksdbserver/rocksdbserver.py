@@ -228,7 +228,7 @@ class Table(object):
 
             yield key
 
-    def iter_items(self, seek_to=None, reverse=False, regex=None, jq_filter=None):
+    def iter_items(self, seek_to=None, reverse=False, regex=None, value_filter=None):
         """
         iterates through the items in the database.
         `seek_to` - seeks to the given position if specified.
@@ -236,14 +236,15 @@ class Table(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only items who's keys match the regex.
-        `jq_filter` - transforms item values (post regex match) using the jq filter.
+        `value_filter` - transforms item values (post regex match) using a jq filter.
+            the jq filter syntax is the same as https://stedolan.github.io/jq/
         """
 
         if regex is not None:
             regex = re.compile(regex)
 
-        if jq_filter is not None:
-            jq_filter = jq(jq_filter)
+        if value_filter is not None:
+            value_filter = jq(value_filter)
 
         _iter = self.rdb.iteritems()
         _iter = self._configure_iterator(_iter, seek_to=seek_to, reverse=reverse)
@@ -254,8 +255,8 @@ class Table(object):
                 continue
 
             value = unpackfn(value)
-            if jq_filter is not None:
-                value = jq_filter.transform(value, multiple_output=True)
+            if value_filter is not None:
+                value = value_filter.transform(value, multiple_output=True)
                 if len(value) == 0:
                     continue
 
@@ -264,7 +265,7 @@ class Table(object):
 
             yield (key, value)
 
-    def iter_values(self, seek_to=None, reverse=False, regex=None, jq_filter=None):
+    def iter_values(self, seek_to=None, reverse=False, regex=None, value_filter=None):
         """
         iterates through the values in the database.
         `seek_to` - seeks to the given position if specified.
@@ -272,11 +273,12 @@ class Table(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only values who's keys match the regex.
-        `jq_filter` - transforms values (post regex match) using the jq filter.
+        `value_filter` - transforms values (post regex match) using a jq filter.
+            the jq filter syntax is the same as https://stedolan.github.io/jq/
         """
 
         item_iter = self.iter_items(
-            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
         )
         for (key, value) in item_iter:
             yield value
@@ -418,7 +420,7 @@ class RocksDBAPI(object):
             yield key
 
     @ensuretable
-    def iter_values(self, table, seek_to=None, reverse=False, regex=None, jq_filter=None):
+    def iter_values(self, table, seek_to=None, reverse=False, regex=None, value_filter=None):
         '''
         iterates through the values in the table `table`.
         `seek_to` - seeks to the given position if specified.
@@ -426,16 +428,17 @@ class RocksDBAPI(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only values who's keys match the regex.
-        `jq_filter` - transforms values (post regex match) using the jq filter.
+        `value_filter` - transforms values (post regex match) using a jq filter
+            the jq filter syntax is the same as https://stedolan.github.io/jq/
         '''
         values_iter = table.iter_values(
-            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
         )
         for value in values_iter:
             yield value
 
     @ensuretable
-    def iter_items(self, table, seek_to=None, reverse=False, regex=None, jq_filter=None):
+    def iter_items(self, table, seek_to=None, reverse=False, regex=None, value_filter=None):
         '''
         iterates through the items in the table `table`..
         `seek_to` - seeks to the given position if specified.
@@ -443,10 +446,11 @@ class RocksDBAPI(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only items who's keys match the regex.
-        `jq_filter` - transforms item values (post regex match) using the jq filter.
+        `value_filter` - transforms item values (post regex match) using a jq filter.
+            the jq filter syntax is the same as https://stedolan.github.io/jq/
         '''
         items_iter = table.iter_items(
-            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
         )
         for (key, value) in items_iter:
             yield (key, value)
