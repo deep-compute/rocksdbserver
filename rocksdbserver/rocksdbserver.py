@@ -7,6 +7,7 @@ import shutil
 import requests
 import msgpack
 import rocksdb
+from jq import jq
 from decorator import decorator
 from funcserver import Server, Client, BaseHandler
 
@@ -227,7 +228,7 @@ class Table(object):
 
             yield key
 
-    def iter_items(self, seek_to=None, reverse=False, regex=None):
+    def iter_items(self, seek_to=None, reverse=False, regex=None, jq_filter=None):
         """
         iterates through the items in the database.
         `seek_to` - seeks to the given position if specified.
@@ -235,21 +236,35 @@ class Table(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only items who's keys match the regex.
+        `jq_filter` - transforms item values (post regex match) using the jq filter.
         """
 
         if regex is not None:
             regex = re.compile(regex)
 
+        if jq_filter is not None:
+            jq_filter = jq(jq_filter)
+
         _iter = self.rdb.iteritems()
         _iter = self._configure_iterator(_iter, seek_to=seek_to, reverse=reverse)
 
+        unpackfn = self.unpackfn
         for (key, value) in _iter:
             if regex is not None and not regex.match(key):
                 continue
 
-            yield (key, self.unpackfn(value))
+            value = unpackfn(value)
+            if jq_filter is not None:
+                value = jq_filter.transform(value, multiple_output=True)
+                if len(value) == 0:
+                    continue
 
-    def iter_values(self, seek_to=None, reverse=False, regex=None):
+                if len(value) == 1:
+                    value = value[0]
+
+            yield (key, value)
+
+    def iter_values(self, seek_to=None, reverse=False, regex=None, jq_filter=None):
         """
         iterates through the values in the database.
         `seek_to` - seeks to the given position if specified.
@@ -257,9 +272,12 @@ class Table(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only values who's keys match the regex.
+        `jq_filter` - transforms values (post regex match) using the jq filter.
         """
 
-        item_iter = self.iter_items(seek_to=seek_to, reverse=reverse, regex=regex)
+        item_iter = self.iter_items(
+            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
+        )
         for (key, value) in item_iter:
             yield value
 
@@ -400,7 +418,7 @@ class RocksDBAPI(object):
             yield key
 
     @ensuretable
-    def iter_values(self, table, seek_to=None, reverse=False, regex=None):
+    def iter_values(self, table, seek_to=None, reverse=False, regex=None, jq_filter=None):
         '''
         iterates through the values in the table `table`.
         `seek_to` - seeks to the given position if specified.
@@ -408,15 +426,16 @@ class RocksDBAPI(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only values who's keys match the regex.
+        `jq_filter` - transforms values (post regex match) using the jq filter.
         '''
         values_iter = table.iter_values(
-            seek_to=seek_to, reverse=reverse, regex=regex,
+            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
         )
         for value in values_iter:
             yield value
 
     @ensuretable
-    def iter_items(self, table, seek_to=None, reverse=False, regex=None):
+    def iter_items(self, table, seek_to=None, reverse=False, regex=None, jq_filter=None):
         '''
         iterates through the items in the table `table`..
         `seek_to` - seeks to the given position if specified.
@@ -424,9 +443,10 @@ class RocksDBAPI(object):
             defaults to the last record if reverse is True.
 
         `regex` - returns only items who's keys match the regex.
+        `jq_filter` - transforms item values (post regex match) using the jq filter.
         '''
         items_iter = table.iter_items(
-            seek_to=seek_to, reverse=reverse, regex=regex,
+            seek_to=seek_to, reverse=reverse, regex=regex, jq_filter=jq_filter,
         )
         for (key, value) in items_iter:
             yield (key, value)

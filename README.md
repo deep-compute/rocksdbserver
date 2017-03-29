@@ -27,8 +27,14 @@ $ sudo mv include/* /usr/include/
 
 ### Install RocksDBServer
 
+rocksdbserver uses [jq.py](https://github.com/mwilliamson/jq.py)  which requires the following
+
+```bash
+$ sudo apt-get install autoconf automake build-essential libtool python-dev
+```
+
 ``` bash
-sudo pip install rocksdbserver
+$ sudo pip install rocksdbserver
 ```
 
 ## Usage
