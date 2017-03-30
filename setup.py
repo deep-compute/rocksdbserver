@@ -42,6 +42,7 @@ setup(
         'msgpack-python',
         'funcserver',
         'pyrocksdb',
+        'jq',
     ],
     package_dir={'rocksdbserver': 'rocksdbserver'},
     packages=find_packages('.'),
