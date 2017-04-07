@@ -22,7 +22,7 @@ def get_long_description():
 
 long_description = get_long_description()
 
-version = '0.1.3'
+version = '0.1.4'
 setup(
     name="rocksdbserver",
     version=version,
