@@ -19,10 +19,16 @@ $ sudo apt-get install libsnappy-dev zlib1g-dev libbz2-dev libgflags-dev
 $ git clone https://github.com/facebook/rocksdb.git
 $ cd rocksdb
 $ # It is tested with this version
-$ git checkout 3.9.fb
+$ git checkout v4.6.1
 $ make shared_lib
-$ sudo mv librocksdb.so /usr/lib/
-$ sudo mv include/* /usr/include/
+$ sudo make install-shared INSTALL_PATH=/usr
+```
+
+### install pyrocksdb
+
+```bash
+pip install "Cython>=0.20"
+pip install git+git://github.com/stephan-hof/pyrocksdb.git
 ```
 
 ### Install RocksDBServer
@@ -34,7 +40,7 @@ $ sudo apt-get install autoconf automake build-essential libtool python-dev
 ```
 
 ``` bash
-$ sudo pip install rocksdbserver
+$ pip install rocksdbserver
 ```
 
 ## Usage
