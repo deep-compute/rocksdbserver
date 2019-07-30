@@ -4,8 +4,6 @@ before_deploy:
 - sudo dpkg -i $TRAVIS_BUILD_DIR/pandoc.deb
 - rm $TRAVIS_BUILD_DIR/pandoc.deb
 - pandoc --from=markdown --to=rst --output=$TRAVIS_BUILD_DIR/README.rst README.md
-before_install:
-- pip3 install black
 deploy:
 - provider: pypi
   distributions: sdist bdist_wheel
@@ -43,6 +41,6 @@ language: python
 python:
 - '2.7'
 script:
-- black --check .
+- docker run -v $(pwd):/app deepcompute/black:python-black-latest --check .
 - echo "no tests yet"
 sudo: required

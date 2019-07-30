@@ -1,3 +1,8 @@
-from rocksdbserver import RocksDBServer, RocksDBClient, \
-                          RocksDBAPI, Table, ensuretable, \
-                          make_staticprefix
+from rocksdbserver import (
+    RocksDBServer,
+    RocksDBClient,
+    RocksDBAPI,
+    Table,
+    ensuretable,
+    make_staticprefix,
+)
