@@ -13,11 +13,13 @@ from funcserver import Server, Client, BaseHandler
 
 MAX_OPEN_FILES = 500000
 
+
 def make_staticprefix(name, size):
     class StaticPrefix(rocksdb.interfaces.SliceTransform):
-        '''
+        """
         Static prefix extractor implementation for pyrocksdb
-        '''
+        """
+
         def name(self):
             return name
 
@@ -32,13 +34,14 @@ def make_staticprefix(name, size):
 
     return StaticPrefix()
 
+
 class AttrDict(dict):
-    '''
+    """
     A dictionary with attribute-style access. It maps attribute access to
     the real dictionary.
 
     # from: http://code.activestate.com/recipes/473786-dictionary-with-attribute-style-access/
-    '''
+    """
 
     def __init__(self, init={}):
         dict.__init__(self, init)
@@ -79,12 +82,12 @@ def ensuretable(fn, self, table, *args, **kwargs):
 
 
 class Table(object):
-    NAME = 'noname'
+    NAME = "noname"
 
     KEYFN = staticmethod(lambda item: uuid.uuid1().hex)
     PACKFN = staticmethod(msgpack.packb)
     UNPACKFN = staticmethod(msgpack.unpackb)
-    STATS_DUMP_PERIOD_SEC = 60 # 60 seconds
+    STATS_DUMP_PERIOD_SEC = 60  # 60 seconds
 
     def __init__(self, data_dir, db):
         self.data_dir = os.path.join(data_dir, self.NAME)
@@ -96,13 +99,14 @@ class Table(object):
         self.unpackfn = self.UNPACKFN
 
     def __str__(self):
-        return '<Table: %s>' % self.NAME
+        return "<Table: %s>" % self.NAME
 
     def __unicode__(self):
         return str(self)
 
     @property
-    def log(self): return self.db.log
+    def log(self):
+        return self.db.log
 
     def open(self):
         opts = self.define_options()
@@ -117,8 +121,7 @@ class Table(object):
         opts.stats_dump_period_sec = self.STATS_DUMP_PERIOD_SEC
         return opts
 
-    def put(self, key, item, batch=None,
-            keyfn=None, packfn=None):
+    def put(self, key, item, batch=None, keyfn=None, packfn=None):
 
         packfn = packfn or self.packfn
         keyfn = keyfn or self.keyfn
@@ -126,8 +129,8 @@ class Table(object):
         db = batch or self.rdb
 
         if isinstance(item, dict):
-            key = key or item.get('_id', None) or keyfn(item)
-            item['_id'] = key
+            key = key or item.get("_id", None) or keyfn(item)
+            item["_id"] = key
         else:
             key = key or keyfn(item)
 
@@ -140,7 +143,8 @@ class Table(object):
         unpackfn = unpackfn or self.unpackfn
 
         value = self.rdb.get(key)
-        if value is None: return None
+        if value is None:
+            return None
 
         item = unpackfn(value)
         return item
@@ -176,7 +180,8 @@ class Table(object):
         _iter = self.rdb.iterkeys()
         _iter.seek_to_first()
         index = -1
-        for index, k in enumerate(_iter): pass
+        for index, k in enumerate(_iter):
+            pass
         return index + 1
 
     def list_keys(self):
@@ -188,7 +193,6 @@ class Table(object):
         _iter = self.rdb.itervalues()
         _iter.seek_to_first()
         return list(self.unpackfn(x) for x in _iter)
-
 
     def _configure_iterator(self, iterator, seek_to=None, reverse=False):
         """
@@ -278,7 +282,7 @@ class Table(object):
         """
 
         item_iter = self.iter_items(
-            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter
         )
         for (key, value) in item_iter:
             yield value
@@ -320,7 +324,7 @@ class Table(object):
         return r
 
     def dump(self, path, fmt=None, allow_coop=True):
-        '''
+        """
         Dumps all table data into a file located at @path.
         @fmt (str): If specified (eg: "%(_id)s => %(url)s"),
             converts the record into a string based on the
@@ -330,8 +334,8 @@ class Table(object):
         @allow_coop (bool): if True, yields control
             every N iterations to allow for co-operative
             multi-tasking to work.
-        '''
-        f = open(path, 'wb')
+        """
+        f = open(path, "wb")
         _iter = self.rdb.itervalues()
         _iter.seek_to_first()
 
@@ -342,14 +346,16 @@ class Table(object):
                 r = self.unpackfn(v)
                 for k, v in r.iteritems():
                     r[k] = AttrDict(v) if isinstance(v, dict) else v
-                f.write('%s\n' % (fmt % r))
+                f.write("%s\n" % (fmt % r))
             else:
                 f.write(v)
 
-            if allow_coop and index % 100000 == 0: time.sleep(0)
+            if allow_coop and index % 100000 == 0:
+                time.sleep(0)
 
         f.close()
         return index + 1
+
 
 class RocksDBAPI(object):
     def __init__(self, data_dir):
@@ -388,40 +394,40 @@ class RocksDBAPI(object):
 
     @ensuretable
     def delete_all(self, table, allow_coop=True):
-        '''
+        """
         Deletes all items from the table. Use with caution.
         If the table is very large, this could take a significant
         amount of time.
-        '''
+        """
         return table.delete_all(allow_coop)
 
     @ensuretable
     def count(self, table):
-        '''
+        """
         Count the number of records (kv pairs)
-        '''
+        """
         return table.count()
 
     # TODO Iteration API methods
     @ensuretable
     def iter_keys(self, table, seek_to=None, reverse=False, regex=None):
-        '''
+        """
         iterates through the keys in the table `table`.
         `seek_to` seeks to the given position if specified.
             - defaults to the first record if reverse is False.
             - defaults to the last record if reverse is True.
 
         `regex` - returns only keys that match the regex.
-        '''
-        keys_iter = table.iter_keys(
-            seek_to=seek_to, reverse=reverse, regex=regex,
-        )
+        """
+        keys_iter = table.iter_keys(seek_to=seek_to, reverse=reverse, regex=regex)
         for key in keys_iter:
             yield key
 
     @ensuretable
-    def iter_values(self, table, seek_to=None, reverse=False, regex=None, value_filter=None):
-        '''
+    def iter_values(
+        self, table, seek_to=None, reverse=False, regex=None, value_filter=None
+    ):
+        """
         iterates through the values in the table `table`.
         `seek_to` - seeks to the given position if specified.
             defaults to the first record if reverse is False.
@@ -430,16 +436,18 @@ class RocksDBAPI(object):
         `regex` - returns only values who's keys match the regex.
         `value_filter` - transforms values (post regex match) using a jq filter
             the jq filter syntax is the same as https://stedolan.github.io/jq/
-        '''
+        """
         values_iter = table.iter_values(
-            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter
         )
         for value in values_iter:
             yield value
 
     @ensuretable
-    def iter_items(self, table, seek_to=None, reverse=False, regex=None, value_filter=None):
-        '''
+    def iter_items(
+        self, table, seek_to=None, reverse=False, regex=None, value_filter=None
+    ):
+        """
         iterates through the items in the table `table`..
         `seek_to` - seeks to the given position if specified.
             defaults to the first record if reverse is False.
@@ -448,33 +456,33 @@ class RocksDBAPI(object):
         `regex` - returns only items who's keys match the regex.
         `value_filter` - transforms item values (post regex match) using a jq filter.
             the jq filter syntax is the same as https://stedolan.github.io/jq/
-        '''
+        """
         items_iter = table.iter_items(
-            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter,
+            seek_to=seek_to, reverse=reverse, regex=regex, value_filter=value_filter
         )
         for (key, value) in items_iter:
             yield (key, value)
 
     @ensuretable
     def list_keys(self, table):
-        '''
+        """
         Lists all the keys in the table. This is meant
         to be used only during debugging in development
         and never in production as it loads all the keys
         in table into RAM which might cause memory load
         issues for large tables.
-        '''
+        """
         return table.list_keys()
 
     @ensuretable
     def list_values(self, table):
-        '''
+        """
         Lists all the values in the table. This is meant
         to be used only during debugging in development
         and never in production as it loads all the values
         in table into RAM which might cause memory load
         issues for large tables.
-        '''
+        """
         return table.list_values()
 
     # Backup API methods
@@ -511,9 +519,10 @@ class RocksDBAPI(object):
     def dump(self, table, path, fmt=None, allow_coop=True):
         return table.dump(path, fmt, allow_coop)
 
+
 class RocksDBServer(Server):
-    NAME = 'RocksDBServer'
-    DESC = 'RocksDB Server'
+    NAME = "RocksDBServer"
+    DESC = "RocksDB Server"
 
     def __init__(self, *args, **kwargs):
         super(RocksDBServer, self).__init__(*args, **kwargs)
@@ -528,10 +537,9 @@ class RocksDBServer(Server):
     def set_file_limits(self):
         try:
             # ulimit -n unlimited
-            resource.setrlimit(resource.RLIMIT_NOFILE,
-                (MAX_OPEN_FILES, MAX_OPEN_FILES))
+            resource.setrlimit(resource.RLIMIT_NOFILE, (MAX_OPEN_FILES, MAX_OPEN_FILES))
         except ValueError:
-            self.log.warning('unable to increase num files limit. run as root?')
+            self.log.warning("unable to increase num files limit. run as root?")
 
     def prepare_api(self):
         super(RocksDBServer, self).prepare_api()
@@ -540,11 +548,17 @@ class RocksDBServer(Server):
 
     def define_args(self, parser):
         super(RocksDBServer, self).define_args(parser)
-        parser.add_argument('data_dir', type=str, metavar='data-dir',
-            help='Directory path where data is stored')
+        parser.add_argument(
+            "data_dir",
+            type=str,
+            metavar="data-dir",
+            help="Directory path where data is stored",
+        )
+
 
 class RocksDBClient(Client):
     pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     RocksDBServer().start()
